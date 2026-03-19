@@ -109,10 +109,20 @@ def add_label_to_thread(gmail, thread_id, label_id):
 
 def find_folder(drive, digits):
     query = f"'{CONFIG['DRIVE_PARENT_FOLDER_ID']}' in parents and mimeType='application/vnd.google-apps.folder'"
-    result = drive.files().list(q=query, fields='files(id, name)').execute()
-    for folder in result.get('files', []):
-        if folder['name'].startswith(digits):
-            return folder
+    page_token = None
+    while True:
+        result = drive.files().list(
+            q=query,
+            fields='nextPageToken, files(id, name)',
+            pageToken=page_token,
+            pageSize=100
+        ).execute()
+        for folder in result.get('files', []):
+            if folder['name'].startswith(digits):
+                return folder
+        page_token = result.get('nextPageToken')
+        if not page_token:
+            break
     return None
 
 
