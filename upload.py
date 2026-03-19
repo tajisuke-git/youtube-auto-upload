@@ -167,8 +167,17 @@ def get_doc_content(docs, doc_id):
                     full_text += text_run.get('content', '')
 
     full_text = full_text.strip()
+    # YouTubeで使えない文字を除去
+    full_text = full_text.replace('\x00', '')  # ヌル文字
+    full_text = full_text.replace('\u200b', '')  # ゼロ幅スペース
+    full_text = ''.join(c for c in full_text if ord(c) >= 32 or c in '\n\t')
+    # YouTubeの説明文は5000文字まで
+    full_text = full_text[:5000]
+
     lines = [l for l in full_text.split('\n') if l.strip()]
     title = lines[0].strip() if lines else doc_id
+    # タイトルは100文字まで
+    title = title[:100]
     return title, full_text
 
 
