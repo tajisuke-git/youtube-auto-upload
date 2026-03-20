@@ -31,6 +31,24 @@ CONFIG = {
 
     # ChatGerry 再生リスト ID（YTのときのみ追加）
     'PLAYLIST_ID_YT': 'PLIFI7HAWh1jACD5oXv3f6U_mkBv7KN-Lr',
+
+    # スプレッドシート①: Youtube_Language_Checklist
+    # B●●●●JP → C列に✔（黄色）, YT●●●●JP → I列に✔（黄色）
+    # A列に4桁数字、6行目からデータ開始
+    'CHECKLIST_SS_ID': '1n3dtkiY3XugTRvTt2eSYkBskNVr4IbPdXibQdOuyoac',
+    'CHECKLIST_SHEET': 'progress tracking',
+    'CHECKLIST_DATA_START_ROW': 6,
+    'CHECKLIST_B_COL': 3,   # C列
+    'CHECKLIST_YT_COL': 9,  # I列
+
+    # スプレッドシート②: 石井瑠海_作成管理表
+    # B●●●●JP → B列に日付, YT●●●●JP → E列に日付
+    # A列に4桁数字、6行目からデータ開始
+    'MGMT_SS_ID': '1erw-9Sv7X0cNcF322Y8yx8d4CYTEOgl8YtPgChMSFF4',
+    'MGMT_SHEET': 'progress tracking',
+    'MGMT_DATA_START_ROW': 6,
+    'MGMT_B_COL': 2,   # B列
+    'MGMT_YT_COL': 5,  # E列
 }
 
 # ── 認証 ──────────────────────────────────────────────────────
@@ -99,7 +117,7 @@ def search_unprocessed_emails(gmail):
                 'subject':   subject,
                 'full_code': match.group(0).upper(),
                 'digits':    match.group(2),
-                'prefix':    match.group(1).upper(),  # 'B' または 'YT'
+                'prefix':    match.group(1).upper(),
             })
     return targets
 
@@ -160,10 +178,6 @@ def find_files_in_folder(drive, folder_id, full_code):
 # ── Google ドキュメント ────────────────────────────────────────
 
 def get_doc_content(docs, doc_id, prefix):
-    """
-    タイトル: 空白行を含む1〜4行目を連結（5行目がGerald C. Hsuの行）
-    説明文:   全文 + ハッシュタグ
-    """
     doc = docs.documents().get(documentId=doc_id).execute()
     full_text = ''
     for elem in doc.get('body', {}).get('content', []):
@@ -175,8 +189,6 @@ def get_doc_content(docs, doc_id, prefix):
                     full_text += text_run.get('content', '')
 
     full_text = full_text.strip()
-
-    # YouTubeで使えない文字を除去
     full_text = full_text.replace('\x00', '')
     full_text = full_text.replace('\u200b', '')
     full_text = ''.join(c for c in full_text if ord(c) >= 32 or c in '\n\t')
@@ -198,7 +210,6 @@ def get_doc_content(docs, doc_id, prefix):
 # ── YouTube ───────────────────────────────────────────────────
 
 def upload_to_youtube(drive, youtube, video_file_id, title, description, prefix):
-    # Drive からダウンロード
     request = drive.files().get_media(fileId=video_file_id)
     fh = io.BytesIO()
     downloader = MediaIoBaseDownload(fh, request, chunksize=20 * 1024 * 1024)
@@ -259,7 +270,115 @@ def upload_to_youtube(drive, youtube, video_file_id, title, description, prefix)
     return video_id
 
 
-# ── スプレッドシート ───────────────────────────────────────────
+# ── スプレッドシート操作 ───────────────────────────────────────
+
+def find_row_by_digits(sheets, spreadsheet_id, sheet_name, digits, start_row):
+    """A列から4桁数字に一致する行番号を返す"""
+    result = sheets.spreadsheets().values().get(
+        spreadsheetId=spreadsheet_id,
+        range=f'{sheet_name}!A{start_row}:A2000'
+    ).execute()
+    values = result.get('values', [])
+    for i, row in enumerate(values):
+        if row and str(row[0]).strip() == digits:
+            return start_row + i
+    return None
+
+
+def col_letter(col_num):
+    """列番号（1始まり）をアルファベットに変換 例: 1→A, 3→C, 9→I"""
+    result = ''
+    while col_num > 0:
+        col_num, remainder = divmod(col_num - 1, 26)
+        result = chr(65 + remainder) + result
+    return result
+
+
+def update_checklist(sheets, digits, prefix):
+    """スプレッドシート①: 該当行のC列またはI列に✔を黄色背景で入力"""
+    ss_id      = CONFIG['CHECKLIST_SS_ID']
+    sheet_name = CONFIG['CHECKLIST_SHEET']
+    start_row  = CONFIG['CHECKLIST_DATA_START_ROW']
+    col_num    = CONFIG['CHECKLIST_B_COL'] if prefix == 'B' else CONFIG['CHECKLIST_YT_COL']
+
+    row = find_row_by_digits(sheets, ss_id, sheet_name, digits, start_row)
+    if not row:
+        print(f'  ⚠ チェックリスト①: {digits} の行が見つかりません')
+        return
+
+    cell = f'{sheet_name}!{col_letter(col_num)}{row}'
+
+    # 値を入力
+    sheets.spreadsheets().values().update(
+        spreadsheetId=ss_id,
+        range=cell,
+        valueInputOption='RAW',
+        body={'values': [['✔']]}
+    ).execute()
+
+    # 黄色背景を設定
+    sheets.spreadsheets().batchUpdate(
+        spreadsheetId=ss_id,
+        body={
+            'requests': [{
+                'repeatCell': {
+                    'range': {
+                        'sheetId': get_sheet_id(sheets, ss_id, sheet_name),
+                        'startRowIndex': row - 1,
+                        'endRowIndex': row,
+                        'startColumnIndex': col_num - 1,
+                        'endColumnIndex': col_num,
+                    },
+                    'cell': {
+                        'userEnteredFormat': {
+                            'backgroundColor': {
+                                'red': 1.0, 'green': 1.0, 'blue': 0.0
+                            }
+                        }
+                    },
+                    'fields': 'userEnteredFormat.backgroundColor'
+                }
+            }]
+        }
+    ).execute()
+    print(f'  ✅ チェックリスト①: {digits}行 {col_letter(col_num)}列 に✔（黄色）を記入')
+
+
+def update_mgmt(sheets, digits, prefix):
+    """スプレッドシート②: 該当行のB列またはE列に今日の日付を入力"""
+    ss_id      = CONFIG['MGMT_SS_ID']
+    sheet_name = CONFIG['MGMT_SHEET']
+    start_row  = CONFIG['MGMT_DATA_START_ROW']
+    col_num    = CONFIG['MGMT_B_COL'] if prefix == 'B' else CONFIG['MGMT_YT_COL']
+
+    row = find_row_by_digits(sheets, ss_id, sheet_name, digits, start_row)
+    if not row:
+        print(f'  ⚠ 管理表②: {digits} の行が見つかりません')
+        return
+
+    jst = timezone(timedelta(hours=9))
+    today = datetime.now(jst).strftime('%Y/%m/%d')
+    cell = f'{sheet_name}!{col_letter(col_num)}{row}'
+
+    sheets.spreadsheets().values().update(
+        spreadsheetId=ss_id,
+        range=cell,
+        valueInputOption='RAW',
+        body={'values': [[today]]}
+    ).execute()
+    print(f'  ✅ 管理表②: {digits}行 {col_letter(col_num)}列 に {today} を記入')
+
+
+def get_sheet_id(sheets, spreadsheet_id, sheet_name):
+    """シート名からシートIDを取得"""
+    info = sheets.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
+    for s in info.get('sheets', []):
+        if s['properties']['title'] == sheet_name:
+            return s['properties']['sheetId']
+    return 0
+
+
+# ── 処理履歴スプレッドシート ──────────────────────────────────
 
 def log_to_sheet(sheets, code, subject, status, note):
     jst = timezone(timedelta(hours=9))
@@ -329,8 +448,14 @@ def main():
             print(f'  タイトル: {title}')
             print(f'  種別: {"YT（ChatGerry再生リストに追加）" if prefix == "YT" else "B"}')
 
+            # YouTube アップロード
             video_id = upload_to_youtube(drive, youtube, video_file['id'], title, description, prefix)
 
+            # スプレッドシート①②に記録
+            update_checklist(sheets, digits, prefix)
+            update_mgmt(sheets, digits, prefix)
+
+            # 処理済みラベル・履歴記録
             add_label_to_thread(gmail, item['thread_id'], label_id)
             note = f'動画ID: {video_id} | https://studio.youtube.com/video/{video_id}/edit'
             log_to_sheet(sheets, full_code, subject, '✅ 成功', note)
