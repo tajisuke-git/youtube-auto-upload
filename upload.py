@@ -193,9 +193,13 @@ def get_doc_content(docs, doc_id, prefix):
     full_text = full_text.replace('\u200b', '')
     full_text = ''.join(c for c in full_text if ord(c) >= 32 or c in '\n\t')
 
-    # タイトル: 1〜4行目（空白行含む）を連結
+    # タイトル: "Gerald C. Hsu" が現れる行の直前まで（空白行含む1〜4行目が上限）
     all_lines = full_text.split('\n')
-    title_lines = all_lines[:4]
+    title_lines = []
+    for line in all_lines[:8]:  # 最大8行まで走査
+        if 'Gerald' in line or 'gerald' in line:
+            break
+        title_lines.append(line)
     title = ' '.join(l.strip() for l in title_lines if l.strip())
     title = title[:100]
 
@@ -357,13 +361,13 @@ def update_mgmt(sheets, digits, prefix):
         return
 
     jst = timezone(timedelta(hours=9))
-    today = datetime.now(jst).strftime('%Y/%m/%d')
+    today = datetime.now(jst).strftime('%-Y/%-m/%-d')
     cell = f'{sheet_name}!{col_letter(col_num)}{row}'
 
     sheets.spreadsheets().values().update(
         spreadsheetId=ss_id,
         range=cell,
-        valueInputOption='RAW',
+        valueInputOption='USER_ENTERED',
         body={'values': [[today]]}
     ).execute()
     print(f'  ✅ 管理表②: {digits}行 {col_letter(col_num)}列 に {today} を記入')
