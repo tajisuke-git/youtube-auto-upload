@@ -203,7 +203,10 @@ def get_doc_content(docs, doc_id, prefix):
             break
         title_lines.append(line)
     title = ' '.join(l.strip() for l in title_lines if l.strip())
-
+    # YouTubeで使えない文字を除去
+    title = title.replace('<', '').replace('>', '')
+    title = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', title)
+    title = title.strip()
     # 文字数を安全に100文字以内に収める（日本語対応）
     if len(title) > 100:
         title = title[:97] + '...'
