@@ -33,22 +33,24 @@ CONFIG = {
     'PLAYLIST_ID_YT': 'PLIFI7HAWh1jACD5oXv3f6U_mkBv7KN-Lr',
 
     # スプレッドシート①: Youtube_Language_Checklist
-    # B●●●●JP → C列に✔（黄色）, YT●●●●JP → I列に✔（黄色）
-    # A列に4桁数字、6行目からデータ開始
+    # B→A列キー→C列に✔, YT→G列キー→I列に✔（黄色）6行目から
     'CHECKLIST_SS_ID': '1n3dtkiY3XugTRvTt2eSYkBskNVr4IbPdXibQdOuyoac',
     'CHECKLIST_SHEET': 'progress tracking',
     'CHECKLIST_DATA_START_ROW': 6,
-    'CHECKLIST_B_COL': 3,   # C列
-    'CHECKLIST_YT_COL': 9,  # I列
+    'CHECKLIST_B_KEY_COL': 1,
+    'CHECKLIST_B_VAL_COL': 3,
+    'CHECKLIST_YT_KEY_COL': 7,
+    'CHECKLIST_YT_VAL_COL': 9,
 
     # スプレッドシート②: 石井瑠海_作成管理表
-    # B●●●●JP → B列に日付, YT●●●●JP → E列に日付
-    # A列に4桁数字、6行目からデータ開始
+    # B→A列キー→B列に日付, YT→D列キー→E列に日付（6行目から）
     'MGMT_SS_ID': '1erw-9Sv7X0cNcF322Y8yx8d4CYTEOgl8YtPgChMSFF4',
     'MGMT_SHEET': 'progress tracking',
     'MGMT_DATA_START_ROW': 6,
-    'MGMT_B_COL': 2,   # B列
-    'MGMT_YT_COL': 5,  # E列
+    'MGMT_B_KEY_COL': 1,
+    'MGMT_B_VAL_COL': 2,
+    'MGMT_YT_KEY_COL': 4,
+    'MGMT_YT_VAL_COL': 5
 }
 
 # ── 認証 ──────────────────────────────────────────────────────
@@ -280,11 +282,12 @@ def upload_to_youtube(drive, youtube, video_file_id, title, description, prefix)
 
 # ── スプレッドシート操作 ───────────────────────────────────────
 
-def find_row_by_digits(sheets, spreadsheet_id, sheet_name, digits, start_row):
-    """A列から4桁数字に一致する行番号を返す"""
+def find_row_by_digits(sheets, spreadsheet_id, sheet_name, digits, start_row, key_col=1):
+    """指定列から4桁数字に一致する行番号を返す"""
+    col = col_letter(key_col)
     result = sheets.spreadsheets().values().get(
         spreadsheetId=spreadsheet_id,
-        range=f'{sheet_name}!A{start_row}:A2000'
+        range=f'{sheet_name}!{col}{start_row}:{col}2000'
     ).execute()
     values = result.get('values', [])
     for i, row in enumerate(values):
@@ -307,9 +310,10 @@ def update_checklist(sheets, digits, prefix):
     ss_id      = CONFIG['CHECKLIST_SS_ID']
     sheet_name = CONFIG['CHECKLIST_SHEET']
     start_row  = CONFIG['CHECKLIST_DATA_START_ROW']
-    col_num    = CONFIG['CHECKLIST_B_COL'] if prefix == 'B' else CONFIG['CHECKLIST_YT_COL']
+    key_col = CONFIG['CHECKLIST_B_KEY_COL'] if prefix == 'B' else CONFIG['CHECKLIST_YT_KEY_COL']
+    col_num = CONFIG['CHECKLIST_B_VAL_COL'] if prefix == 'B' else CONFIG['CHECKLIST_YT_VAL_COL']
 
-    row = find_row_by_digits(sheets, ss_id, sheet_name, digits, start_row)
+    row = find_row_by_digits(sheets, ss_id, sheet_name, digits, start_row, key_col)
     if not row:
         print(f'  ⚠ チェックリスト①: {digits} の行が見つかりません')
         return
@@ -357,9 +361,10 @@ def update_mgmt(sheets, digits, prefix):
     ss_id      = CONFIG['MGMT_SS_ID']
     sheet_name = CONFIG['MGMT_SHEET']
     start_row  = CONFIG['MGMT_DATA_START_ROW']
-    col_num    = CONFIG['MGMT_B_COL'] if prefix == 'B' else CONFIG['MGMT_YT_COL']
+    key_col = CONFIG['MGMT_B_KEY_COL'] if prefix == 'B' else CONFIG['MGMT_YT_KEY_COL']
+    col_num = CONFIG['MGMT_B_VAL_COL'] if prefix == 'B' else CONFIG['MGMT_YT_VAL_COL']
 
-    row = find_row_by_digits(sheets, ss_id, sheet_name, digits, start_row)
+    row = find_row_by_digits(sheets, ss_id, sheet_name, digits, start_row, key_col)
     if not row:
         print(f'  ⚠ 管理表②: {digits} の行が見つかりません')
         return
