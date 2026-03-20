@@ -216,7 +216,11 @@ def get_doc_content(docs, doc_id, prefix):
     # YT の場合: タイトル冒頭の "ChatGerry" を "【ChatGerry】" に変換
     if prefix == 'YT':
         title = re.sub(r'^ChatGerry', '【ChatGerry】', title, flags=re.IGNORECASE)
-
+    
+    # 変換後に100文字以内に収める
+    if len(title) > 100:
+        title = title[:97] + '...'
+        
     # 説明文: 全文 + ハッシュタグ
     hashtags = CONFIG['HASHTAGS_YT'] if prefix == 'YT' else CONFIG['HASHTAGS_B']
     description = full_text + '\n\n' + hashtags
