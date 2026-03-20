@@ -24,12 +24,18 @@ CONFIG = {
     'GMAIL_PROCESSED_LABEL':  'YT処理済み',
     'YOUTUBE_CATEGORY_ID':    '27',
     'SEARCH_DAYS':            30,
+
+    # ハッシュタグ
+    'HASHTAGS_YT': '#eclairemd #healthtalk #chatgerry',
+    'HASHTAGS_B':  '#eclairemd #healthtalk',
+
+    # ChatGerry 再生リスト ID（YTのときのみ追加）
+    'PLAYLIST_ID_YT': 'PLIFI7HAWh1jACD5oXv3f6U_mkBv7KN-Lr',
 }
 
 # ── 認証 ──────────────────────────────────────────────────────
 
 def build_credentials():
-    """環境変数からOAuth認証情報を構築"""
     import json
     token_json = os.environ['GOOGLE_TOKEN_JSON']
     token_data = json.loads(token_json)
@@ -43,7 +49,6 @@ def build_credentials():
         scopes=token_data.get('scopes'),
     )
 
-    # トークンが期限切れなら自動更新
     if creds.expired and creds.refresh_token:
         creds.refresh(Request())
 
@@ -94,6 +99,7 @@ def search_unprocessed_emails(gmail):
                 'subject':   subject,
                 'full_code': match.group(0).upper(),
                 'digits':    match.group(2),
+                'prefix':    match.group(1).upper(),  # 'B' または 'YT'
             })
     return targets
 
@@ -139,13 +145,11 @@ def find_files_in_folder(drive, folder_id, full_code):
         name = f['name']
         mime = f['mimeType']
 
-        # 動画: スペースを除いて比較
         if name.upper().replace(' ', '') == f'{full_code}.MP4':
             video_file = f
             size_mb = int(f.get('size', 0)) / 1024 / 1024
             print(f'  動画: "{name}" ({size_mb:.1f} MB)')
 
-        # Google ドキュメント
         if mime == 'application/vnd.google-apps.document' and name.upper() == full_code:
             doc_file = f
             print(f'  ドキュメント: "{name}"')
@@ -155,7 +159,11 @@ def find_files_in_folder(drive, folder_id, full_code):
 
 # ── Google ドキュメント ────────────────────────────────────────
 
-def get_doc_content(docs, doc_id):
+def get_doc_content(docs, doc_id, prefix):
+    """
+    タイトル: 空白行を含む1〜4行目を連結（5行目がGerald C. Hsuの行）
+    説明文:   全文 + ハッシュタグ
+    """
     doc = docs.documents().get(documentId=doc_id).execute()
     full_text = ''
     for elem in doc.get('body', {}).get('content', []):
@@ -167,23 +175,29 @@ def get_doc_content(docs, doc_id):
                     full_text += text_run.get('content', '')
 
     full_text = full_text.strip()
-    # YouTubeで使えない文字を除去
-    full_text = full_text.replace('\x00', '')  # ヌル文字
-    full_text = full_text.replace('\u200b', '')  # ゼロ幅スペース
-    full_text = ''.join(c for c in full_text if ord(c) >= 32 or c in '\n\t')
-    # YouTubeの説明文は5000文字まで
-    full_text = full_text[:5000]
 
-    lines = [l for l in full_text.split('\n') if l.strip()]
-    title = lines[0].strip() if lines else doc_id
-    # タイトルは100文字まで
+    # YouTubeで使えない文字を除去
+    full_text = full_text.replace('\x00', '')
+    full_text = full_text.replace('\u200b', '')
+    full_text = ''.join(c for c in full_text if ord(c) >= 32 or c in '\n\t')
+
+    # タイトル: 1〜4行目（空白行含む）を連結
+    all_lines = full_text.split('\n')
+    title_lines = all_lines[:4]
+    title = ' '.join(l.strip() for l in title_lines if l.strip())
     title = title[:100]
-    return title, full_text
+
+    # 説明文: 全文 + ハッシュタグ
+    hashtags = CONFIG['HASHTAGS_YT'] if prefix == 'YT' else CONFIG['HASHTAGS_B']
+    description = full_text + '\n\n' + hashtags
+    description = description[:5000]
+
+    return title, description
 
 
 # ── YouTube ───────────────────────────────────────────────────
 
-def upload_to_youtube(drive, youtube, video_file_id, title, description):
+def upload_to_youtube(drive, youtube, video_file_id, title, description, prefix):
     # Drive からダウンロード
     request = drive.files().get_media(fileId=video_file_id)
     fh = io.BytesIO()
@@ -206,8 +220,8 @@ def upload_to_youtube(drive, youtube, video_file_id, title, description):
             'categoryId':  CONFIG['YOUTUBE_CATEGORY_ID'],
         },
         'status': {
-            'privacyStatus':            'private',
-            'selfDeclaredMadeForKids':  False,
+            'privacyStatus':           'private',
+            'selfDeclaredMadeForKids': False,
         },
     }
 
@@ -221,7 +235,27 @@ def upload_to_youtube(drive, youtube, video_file_id, title, description):
             print(f'  アップロード: {int(status.progress() * 100)}%')
 
     video_id = response['id']
-    print(f'  ✅ 完了: https://studio.youtube.com/video/{video_id}/edit')
+    print(f'  ✅ アップロード完了: https://studio.youtube.com/video/{video_id}/edit')
+
+    # YT の場合は再生リストに追加
+    if prefix == 'YT':
+        try:
+            youtube.playlistItems().insert(
+                part='snippet',
+                body={
+                    'snippet': {
+                        'playlistId': CONFIG['PLAYLIST_ID_YT'],
+                        'resourceId': {
+                            'kind':    'youtube#video',
+                            'videoId': video_id,
+                        },
+                    }
+                }
+            ).execute()
+            print(f'  ✅ 再生リスト（ChatGerry）に追加完了')
+        except Exception as e:
+            print(f'  ⚠ 再生リスト追加エラー: {e}')
+
     return video_id
 
 
@@ -261,6 +295,7 @@ def main():
         full_code = item['full_code']
         digits    = item['digits']
         subject   = item['subject']
+        prefix    = item['prefix']
 
         print(f'▶ 処理開始: {full_code}（件名: "{subject}"）')
 
@@ -290,10 +325,11 @@ def main():
                 add_label_to_thread(gmail, item['thread_id'], label_id)
                 continue
 
-            title, description = get_doc_content(docs, doc_file['id'])
+            title, description = get_doc_content(docs, doc_file['id'], prefix)
             print(f'  タイトル: {title}')
+            print(f'  種別: {"YT（ChatGerry再生リストに追加）" if prefix == "YT" else "B"}')
 
-            video_id = upload_to_youtube(drive, youtube, video_file['id'], title, description)
+            video_id = upload_to_youtube(drive, youtube, video_file['id'], title, description, prefix)
 
             add_label_to_thread(gmail, item['thread_id'], label_id)
             note = f'動画ID: {video_id} | https://studio.youtube.com/video/{video_id}/edit'
