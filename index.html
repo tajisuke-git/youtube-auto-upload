@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="YT投稿">
+  <title>YouTube 投稿トリガー</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #f2f2f7;
+      min-height: 100vh;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+    .app { max-width: 390px; margin: 0 auto; padding: 24px 16px 40px; }
+    .title {
+      font-size: 22px; font-weight: 600; color: #1c1c1e;
+      text-align: center; margin-bottom: 28px; margin-top: 16px;
+    }
+    .card {
+      background: #fff; border-radius: 16px;
+      padding: 16px 20px; margin-bottom: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .label { font-size: 13px; color: #8e8e93; margin-bottom: 10px; font-weight: 500; }
+    .seg {
+      display: flex; border-radius: 10px; overflow: hidden;
+      border: 1px solid #d1d1d6;
+    }
+    .seg button {
+      flex: 1; padding: 12px; font-size: 17px; font-weight: 500;
+      background: transparent; border: none; cursor: pointer;
+      color: #8e8e93; transition: background 0.15s, color 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .seg button.active { background: #007aff; color: #fff; }
+    .digits { display: flex; gap: 10px; justify-content: center; }
+    .digit-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    .digit-label { font-size: 11px; color: #8e8e93; font-weight: 500; }
+    .digit-box {
+      display: flex; flex-direction: column; align-items: center;
+      border: 1px solid #d1d1d6; border-radius: 12px; overflow: hidden;
+      width: 68px; background: #f2f2f7;
+    }
+    .digit-box button {
+      width: 100%; padding: 10px 0; font-size: 20px;
+      background: transparent; border: none; cursor: pointer;
+      color: #007aff; line-height: 1;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    .digit-box button:active { background: #e5e5ea; }
+    .digit-box .val {
+      font-size: 28px; font-weight: 600; color: #1c1c1e;
+      padding: 8px 0;
+      border-top: 1px solid #d1d1d6;
+      border-bottom: 1px solid #d1d1d6;
+      width: 100%; text-align: center;
+      background: #fff;
+    }
+    .preview {
+      background: #f2f2f7; border-radius: 12px;
+      padding: 14px 16px; text-align: center;
+    }
+    .preview-label { font-size: 12px; color: #8e8e93; margin-bottom: 6px; font-weight: 500; }
+    .preview-code { font-size: 26px; font-weight: 700; color: #1c1c1e; letter-spacing: 2px; }
+    .send-btn {
+      width: 100%; padding: 18px; font-size: 17px; font-weight: 600;
+      background: #007aff; color: #fff; border: none;
+      border-radius: 14px; cursor: pointer; margin-top: 8px;
+      -webkit-tap-highlight-color: transparent;
+      transition: opacity 0.15s;
+    }
+    .send-btn:active { opacity: 0.8; }
+    .note {
+      font-size: 12px; color: #8e8e93; text-align: center;
+      margin-top: 14px; line-height: 1.7;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="title">YouTube 投稿トリガー</div>
+
+    <div class="card">
+      <div class="label">種別</div>
+      <div class="seg">
+        <button class="active" id="btn-b" onclick="setPrefix('B')">B</button>
+        <button id="btn-yt" onclick="setPrefix('YT')">YT</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="label">4桁番号</div>
+      <div class="digits">
+        <div class="digit-wrap">
+          <div class="digit-label">千</div>
+          <div class="digit-box">
+            <button onclick="inc(0)">▲</button>
+            <div class="val" id="d0">1</div>
+            <button onclick="dec(0)">▼</button>
+          </div>
+        </div>
+        <div class="digit-wrap">
+          <div class="digit-label">百</div>
+          <div class="digit-box">
+            <button onclick="inc(1)">▲</button>
+            <div class="val" id="d1">4</div>
+            <button onclick="dec(1)">▼</button>
+          </div>
+        </div>
+        <div class="digit-wrap">
+          <div class="digit-label">十</div>
+          <div class="digit-box">
+            <button onclick="inc(2)">▲</button>
+            <div class="val" id="d2">6</div>
+            <button onclick="dec(2)">▼</button>
+          </div>
+        </div>
+        <div class="digit-wrap">
+          <div class="digit-label">一</div>
+          <div class="digit-box">
+            <button onclick="inc(3)">▲</button>
+            <div class="val" id="d3">5</div>
+            <button onclick="dec(3)">▼</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="preview">
+        <div class="preview-label">送信される件名</div>
+        <div class="preview-code" id="preview">B1465JP</div>
+      </div>
+    </div>
+
+    <button class="send-btn" onclick="sendMail()">メールを送信</button>
+    <div class="note">
+      タップするとメールアプリが開きます<br>
+      宛先・件名は自動入力されています<br>
+      そのまま送信してください
+    </div>
+  </div>
+
+  <script>
+    let prefix = 'B';
+    let digits = [1, 4, 6, 5];
+
+    function setPrefix(p) {
+      prefix = p;
+      document.getElementById('btn-b').classList.toggle('active', p === 'B');
+      document.getElementById('btn-yt').classList.toggle('active', p === 'YT');
+      updatePreview();
+    }
+
+    function inc(i) {
+      digits[i] = (digits[i] + 1) % 10;
+      document.getElementById('d' + i).textContent = digits[i];
+      updatePreview();
+    }
+
+    function dec(i) {
+      digits[i] = (digits[i] + 9) % 10;
+      document.getElementById('d' + i).textContent = digits[i];
+      updatePreview();
+    }
+
+    function getCode() {
+      return prefix + digits.join('') + 'JP';
+    }
+
+    function updatePreview() {
+      document.getElementById('preview').textContent = getCode();
+    }
+
+    function sendMail() {
+      const code = getCode();
+      const to = 'health1000plus.jp@gmail.com';
+      const subject = encodeURIComponent(code);
+      window.location.href = 'mailto:' + to + '?subject=' + subject;
+    }
+  </script>
+</body>
+</html>
