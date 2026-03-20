@@ -33,7 +33,6 @@ CONFIG = {
     'PLAYLIST_ID_YT': 'PLIFI7HAWh1jACD5oXv3f6U_mkBv7KN-Lr',
 
     # スプレッドシート①: Youtube_Language_Checklist
-    # B→A列キー→C列に✔, YT→G列キー→I列に✔（黄色）6行目から
     'CHECKLIST_SS_ID': '1n3dtkiY3XugTRvTt2eSYkBskNVr4IbPdXibQdOuyoac',
     'CHECKLIST_SHEET': 'progress tracking',
     'CHECKLIST_DATA_START_ROW': 6,
@@ -43,14 +42,13 @@ CONFIG = {
     'CHECKLIST_YT_VAL_COL': 9,
 
     # スプレッドシート②: 石井瑠海_作成管理表
-    # B→A列キー→B列に日付, YT→D列キー→E列に日付（6行目から）
     'MGMT_SS_ID': '1erw-9Sv7X0cNcF322Y8yx8d4CYTEOgl8YtPgChMSFF4',
     'MGMT_SHEET': 'progress tracking',
     'MGMT_DATA_START_ROW': 6,
     'MGMT_B_KEY_COL': 1,
     'MGMT_B_VAL_COL': 2,
     'MGMT_YT_KEY_COL': 4,
-    'MGMT_YT_VAL_COL': 5
+    'MGMT_YT_VAL_COL': 5,
 }
 
 # ── 認証 ──────────────────────────────────────────────────────
@@ -195,26 +193,26 @@ def get_doc_content(docs, doc_id, prefix):
     full_text = full_text.replace('\u200b', '')
     full_text = ''.join(c for c in full_text if ord(c) >= 32 or c in '\n\t')
 
-    # タイトル: "Gerald C. Hsu" が現れる行の直前まで（空白行含む1〜4行目が上限）
+    # タイトル: "Gerald C. Hsu" が現れる行の直前まで（最大8行まで走査）
     all_lines = full_text.split('\n')
     title_lines = []
-    for line in all_lines[:8]:  # 最大8行まで走査
+    for line in all_lines[:8]:
         if 'Gerald' in line or 'gerald' in line:
             break
         title_lines.append(line)
     title = ' '.join(l.strip() for l in title_lines if l.strip())
+
     # YouTubeで使えない文字を除去
     title = title.replace('<', '').replace('>', '')
     title = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', title)
     title = title.strip()
-    # 文字数を安全に100文字以内に収める（日本語対応）
+
+    # 100文字以内に収める
     if len(title) > 100:
         title = title[:97] + '...'
-    # 念のため前後の空白を除去
-    title = title.strip()
-    # タイトルが空の場合はデフォルト値
     if not title:
         title = 'No Title'
+
     # YT の場合: タイトル冒頭の "ChatGerry" を "【ChatGerry】" に変換
     if prefix == 'YT':
         title = re.sub(r'^ChatGerry', '【ChatGerry】', title, flags=re.IGNORECASE)
@@ -230,6 +228,7 @@ def get_doc_content(docs, doc_id, prefix):
 # ── YouTube ───────────────────────────────────────────────────
 
 def upload_to_youtube(drive, youtube, video_file_id, title, description, prefix):
+    # Drive からダウンロード
     request = drive.files().get_media(fileId=video_file_id)
     fh = io.BytesIO()
     downloader = MediaIoBaseDownload(fh, request, chunksize=20 * 1024 * 1024)
@@ -241,13 +240,13 @@ def upload_to_youtube(drive, youtube, video_file_id, title, description, prefix)
         if status:
             print(f'  ダウンロード: {int(status.progress() * 100)}%')
 
-fh.seek(0)
+    fh.seek(0)
     print('  YouTubeにアップロード中...')
 
     body = {
         'snippet': {
-            'title':       'テストタイトル',
-            'description': '',
+            'title':       title,
+            'description': description,
             'categoryId':  CONFIG['YOUTUBE_CATEGORY_ID'],
         },
         'status': {
@@ -255,6 +254,7 @@ fh.seek(0)
             'selfDeclaredMadeForKids': False,
         },
     }
+
     media = MediaIoBaseUpload(fh, mimetype='video/mp4', chunksize=20 * 1024 * 1024, resumable=True)
     upload_req = youtube.videos().insert(part='snippet,status', body=body, media_body=media)
 
@@ -319,8 +319,8 @@ def update_checklist(sheets, digits, prefix):
     ss_id      = CONFIG['CHECKLIST_SS_ID']
     sheet_name = CONFIG['CHECKLIST_SHEET']
     start_row  = CONFIG['CHECKLIST_DATA_START_ROW']
-    key_col = CONFIG['CHECKLIST_B_KEY_COL'] if prefix == 'B' else CONFIG['CHECKLIST_YT_KEY_COL']
-    col_num = CONFIG['CHECKLIST_B_VAL_COL'] if prefix == 'B' else CONFIG['CHECKLIST_YT_VAL_COL']
+    key_col    = CONFIG['CHECKLIST_B_KEY_COL'] if prefix == 'B' else CONFIG['CHECKLIST_YT_KEY_COL']
+    col_num    = CONFIG['CHECKLIST_B_VAL_COL'] if prefix == 'B' else CONFIG['CHECKLIST_YT_VAL_COL']
 
     row = find_row_by_digits(sheets, ss_id, sheet_name, digits, start_row, key_col)
     if not row:
@@ -329,7 +329,6 @@ def update_checklist(sheets, digits, prefix):
 
     cell = f'{sheet_name}!{col_letter(col_num)}{row}'
 
-    # 値を入力
     sheets.spreadsheets().values().update(
         spreadsheetId=ss_id,
         range=cell,
@@ -337,7 +336,6 @@ def update_checklist(sheets, digits, prefix):
         body={'values': [['✔']]}
     ).execute()
 
-    # 黄色背景を設定
     sheets.spreadsheets().batchUpdate(
         spreadsheetId=ss_id,
         body={
@@ -370,8 +368,8 @@ def update_mgmt(sheets, digits, prefix):
     ss_id      = CONFIG['MGMT_SS_ID']
     sheet_name = CONFIG['MGMT_SHEET']
     start_row  = CONFIG['MGMT_DATA_START_ROW']
-    key_col = CONFIG['MGMT_B_KEY_COL'] if prefix == 'B' else CONFIG['MGMT_YT_KEY_COL']
-    col_num = CONFIG['MGMT_B_VAL_COL'] if prefix == 'B' else CONFIG['MGMT_YT_VAL_COL']
+    key_col    = CONFIG['MGMT_B_KEY_COL'] if prefix == 'B' else CONFIG['MGMT_YT_KEY_COL']
+    col_num    = CONFIG['MGMT_B_VAL_COL'] if prefix == 'B' else CONFIG['MGMT_YT_VAL_COL']
 
     row = find_row_by_digits(sheets, ss_id, sheet_name, digits, start_row, key_col)
     if not row:
