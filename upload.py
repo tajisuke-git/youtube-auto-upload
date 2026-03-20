@@ -244,10 +244,11 @@ def upload_to_youtube(drive, youtube, video_file_id, title, description, prefix)
     fh.seek(0)
     print('  YouTubeにアップロード中...')
 
-    body = {
+
+body = {
         'snippet': {
-            'title':       title,
-            'description': description,
+            'title':       'テストタイトル',  # 一時的に固定
+            'description': '',               # 一時的に空に
             'categoryId':  CONFIG['YOUTUBE_CATEGORY_ID'],
         },
         'status': {
@@ -255,7 +256,6 @@ def upload_to_youtube(drive, youtube, video_file_id, title, description, prefix)
             'selfDeclaredMadeForKids': False,
         },
     }
-
     media = MediaIoBaseUpload(fh, mimetype='video/mp4', chunksize=20 * 1024 * 1024, resumable=True)
     upload_req = youtube.videos().insert(part='snippet,status', body=body, media_body=media)
 
