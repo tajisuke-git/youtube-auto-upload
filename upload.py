@@ -203,8 +203,15 @@ def get_doc_content(docs, doc_id, prefix):
             break
         title_lines.append(line)
     title = ' '.join(l.strip() for l in title_lines if l.strip())
-    title = title[:100]
 
+    # 文字数を安全に100文字以内に収める（日本語対応）
+    if len(title) > 100:
+        title = title[:97] + '...'
+    # 念のため前後の空白を除去
+    title = title.strip()
+    # タイトルが空の場合はデフォルト値
+    if not title:
+        title = 'No Title'
     # YT の場合: タイトル冒頭の "ChatGerry" を "【ChatGerry】" に変換
     if prefix == 'YT':
         title = re.sub(r'^ChatGerry', '【ChatGerry】', title, flags=re.IGNORECASE)
