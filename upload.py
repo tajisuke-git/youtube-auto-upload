@@ -241,14 +241,13 @@ def upload_to_youtube(drive, youtube, video_file_id, title, description, prefix)
         if status:
             print(f'  ダウンロード: {int(status.progress() * 100)}%')
 
-    fh.seek(0)
+fh.seek(0)
     print('  YouTubeにアップロード中...')
 
-
-body = {
+    body = {
         'snippet': {
-            'title':       'テストタイトル',  # 一時的に固定
-            'description': '',               # 一時的に空に
+            'title':       'テストタイトル',
+            'description': '',
             'categoryId':  CONFIG['YOUTUBE_CATEGORY_ID'],
         },
         'status': {
